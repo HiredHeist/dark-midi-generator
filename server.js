@@ -15,10 +15,10 @@ const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY
 });
 
-// Generate stems endpoint
-app.post('/api/generate', async (req, res) => {
+// Generate full song with sections
+app.post('/api/generate-song', async (req, res) => {
     try {
-        const { genre, bpm, prompt } = req.body;
+        const { genre, bpm, prompt, duration } = req.body;
 
         if (!prompt || !genre || !bpm) {
             return res.status(400).json({ error: 'Missing required parameters' });
@@ -31,25 +31,161 @@ app.post('/api/generate', async (req, res) => {
         const genreDescriptions = {
             'doom-metal': {
                 name: 'Doom Metal',
-                instructions: 'Include: heavy guitar riffs in drop tunings (C2-E3), crushing bass (E1-A2), slow powerful drums'
+                instruments: 'Heavy rhythm guitar (drop C/D tuning, C2-E3), Lead guitar (E3-G4), Crushing bass (E1-A2), Kick drum (C1), Snare (D2), Cymbals (F#3-A3)',
+                structure: 'Intro (8-16 beats), Verse (16-32 beats), Chorus (16-24 beats), Bridge (8-16 beats), Solo (16-32 beats), Outro (8-16 beats)'
             },
             'industrial': {
                 name: 'Industrial',
-                instructions: 'Include: distorted synths, mechanical percussion, harsh bass lines'
+                instruments: 'Distorted synth bass (E1-A2), Lead synth (E3-C5), Mechanical percussion (C2-G3), Metallic hits (A3-C4), Noise textures (C3-E4)',
+                structure: 'Intro (8-16 beats), Build (16 beats), Main (32 beats), Breakdown (16 beats), Climax (24 beats), Outro (8-16 beats)'
             },
             'dungeon-synth': {
                 name: 'Dungeon Synth',
-                instructions: 'Include: medieval-style synths, ambient pads, minimal percussion'
+                instruments: 'Medieval synth lead (A3-E5), Ambient pad (A2-E3), Sub bass (E1-A1), Bell sounds (E5-A6), Choir pad (C3-G4)',
+                structure: 'Intro (16 beats), Theme A (32 beats), Theme B (32 beats), Development (32 beats), Reprise (24 beats), Outro (16 beats)'
             }
         };
 
         const genreInfo = genreDescriptions[genre];
         
-        const systemPrompt = `You are a music composition AI specializing in ${genreInfo.name}. Generate MIDI stem data for a ${bpm} BPM composition.
+        const systemPrompt = `You are a professional music composition AI specializing in ${genreInfo.name}.
+
+Create a complete song structure with these sections: ${genreInfo.structure}
+
+Available instruments: ${genreInfo.instruments}
+
+CRITICAL RULES:
+1. Return ONLY valid JSON - no markdown, no explanations
+2. Create separate sections (intro, verse, chorus, etc.)
+3. Each section has multiple instrument stems
+4. Keep note counts reasonable: 8-32 notes per stem depending on instrument
+5. Maintain musical coherence between sections
+6. Use proper note ranges for each instrument
+
+Return this EXACT JSON structure:
+{
+  "title": "song title",
+  "sections": [
+    {
+      "name": "intro",
+      "start_beat": 0,
+      "duration_beats": 16,
+      "stems": [
+        {
+          "instrument": "rhythm_guitar",
+          "notes": [
+            {"pitch": "C2", "time": 0, "duration": 2, "velocity": 100}
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+Musical guidelines:
+- Tempo: ${bpm} BPM
+- Each section should flow into the next
+- Maintain consistent key and rhythm patterns
+- Use dynamics (velocity variations)
+- NO trailing commas
+- All times are relative to section start (start at 0 for each section)`;
+
+        const message = await anthropic.messages.create({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 8000,
+            messages: [{
+                role: 'user',
+                content: `${systemPrompt}\n\nUser request: ${prompt}\nBPM: ${bpm}\nGenre: ${genreInfo.name}\n\nCreate a cohesive ${genreInfo.name} song with proper structure.`
+            }]
+        });
+
+        const content = message.content[0].text;
+        
+        // Extract JSON from response
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        
+        if (!jsonMatch) {
+            console.error('No JSON object found in response:', content);
+            throw new Error('AI did not return valid JSON. Please try again.');
+        }
+        
+        let songData;
+        try {
+            let jsonStr = jsonMatch[0];
+            // Clean up common JSON issues
+            jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+            jsonStr = jsonStr.replace(/\n/g, ' ');
+            
+            songData = JSON.parse(jsonStr);
+            
+            // Validate structure
+            if (!songData.sections || !Array.isArray(songData.sections)) {
+                throw new Error('Invalid song structure');
+            }
+            
+            // Validate each section
+            for (const section of songData.sections) {
+                if (!section.name || !section.stems || !Array.isArray(section.stems)) {
+                    throw new Error('Invalid section structure');
+                }
+                for (const stem of section.stems) {
+                    if (!stem.instrument || !Array.isArray(stem.notes)) {
+                        throw new Error('Invalid stem structure');
+                    }
+                }
+            }
+            
+        } catch (parseError) {
+            console.error('JSON parse error:', parseError.message);
+            console.error('Attempted to parse:', jsonMatch[0].substring(0, 500));
+            throw new Error('AI returned malformed JSON. Please try generating again.');
+        }
+        
+        res.json({ song: songData });
+
+    } catch (error) {
+        console.error('Generation error:', error);
+        res.status(500).json({ error: error.message || 'Failed to generate song' });
+    }
+});
+
+// Legacy endpoint for simple generation (backwards compatibility)
+app.post('/api/generate', async (req, res) => {
+    try {
+        const { genre, bpm, prompt } = req.body;
+
+        if (!prompt || !genre || !bpm) {
+            return res.status(400).json({ error: 'Missing required parameters' });
+        }
+
+        if (!process.env.ANTHROPIC_API_KEY) {
+            return res.status(500).json({ error: 'API key not configured.' });
+        }
+
+        const genreDescriptions = {
+            'doom-metal': {
+                name: 'Doom Metal',
+                instructions: 'Heavy guitar riffs in drop tunings (C2-E3), crushing bass (E1-A2), slow powerful drums'
+            },
+            'industrial': {
+                name: 'Industrial',
+                instructions: 'Distorted synths, mechanical percussion, harsh bass lines'
+            },
+            'dungeon-synth': {
+                name: 'Dungeon Synth',
+                instructions: 'Medieval-style synths, ambient pads, minimal percussion'
+            }
+        };
+
+        const genreInfo = genreDescriptions[genre];
+        
+        const systemPrompt = `You are a music composition AI specializing in ${genreInfo.name}.
 
 CRITICAL: Return ONLY valid JSON - no markdown, no explanations, no backticks.
 
-Return a JSON array of stems with this EXACT structure:
+Return a JSON array with 3-5 instrument stems. Each stem should have 8-24 notes maximum.
+
+EXACT structure required:
 [
   {
     "name": "instrument name",
@@ -61,15 +197,16 @@ Return a JSON array of stems with this EXACT structure:
 
 Rules:
 - ${genreInfo.instructions}
-- Keep compositions 16-32 beats long
-- Use appropriate note ranges for each instrument
-- NO trailing commas in JSON
-- All numbers must be valid (no decimals for velocity)
-- Pitch format: Note + octave (e.g., "C2", "D#3", "F4")`;
+- Keep compositions SHORT: 16-32 beats total
+- 3-5 stems maximum
+- 8-24 notes per stem
+- NO trailing commas
+- Velocity: 60-127 (integers only)
+- Pitch: Note + octave (e.g., "C2", "D#3")`;
 
         const message = await anthropic.messages.create({
             model: 'claude-sonnet-4-20250514',
-            max_tokens: 1000,
+            max_tokens: 4000,
             messages: [{
                 role: 'user',
                 content: `${systemPrompt}\n\nUser request: ${prompt}\nBPM: ${bpm}\nGenre: ${genreInfo.name}`
@@ -77,47 +214,18 @@ Rules:
         });
 
         const content = message.content[0].text;
-        
-        // Try to extract JSON array from response
         const jsonMatch = content.match(/\[[\s\S]*\]/);
         
         if (!jsonMatch) {
-            console.error('No JSON array found in response:', content);
-            throw new Error('AI did not return valid JSON. Please try again.');
+            throw new Error('Could not parse AI response');
         }
         
         let stems;
         try {
-            // Clean up common JSON issues
             let jsonStr = jsonMatch[0];
-            // Remove trailing commas before closing brackets/braces
             jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
-            // Fix common formatting issues
-            jsonStr = jsonStr.replace(/\n/g, ' ');
-            
             stems = JSON.parse(jsonStr);
-            
-            // Validate structure
-            if (!Array.isArray(stems) || stems.length === 0) {
-                throw new Error('Invalid stems array structure');
-            }
-            
-            // Validate each stem has required fields
-            for (const stem of stems) {
-                if (!stem.name || !Array.isArray(stem.notes)) {
-                    throw new Error('Stem missing required fields (name or notes)');
-                }
-                // Ensure all notes have required fields
-                for (const note of stem.notes) {
-                    if (!note.pitch || note.time === undefined || note.duration === undefined) {
-                        throw new Error('Note missing required fields');
-                    }
-                }
-            }
-            
-        } catch (parseError) {
-            console.error('JSON parse error:', parseError.message);
-            console.error('Attempted to parse:', jsonMatch[0].substring(0, 500));
+        } catch (e) {
             throw new Error('AI returned malformed JSON. Please try generating again.');
         }
         
@@ -139,7 +247,7 @@ app.post('/api/remake', async (req, res) => {
         }
 
         if (!process.env.ANTHROPIC_API_KEY) {
-            return res.status(500).json({ error: 'API key not configured. Please set ANTHROPIC_API_KEY environment variable.' });
+            return res.status(500).json({ error: 'API key not configured.' });
         }
 
         const genreDescriptions = {
@@ -152,7 +260,7 @@ app.post('/api/remake', async (req, res) => {
 
         const message = await anthropic.messages.create({
             model: 'claude-sonnet-4-20250514',
-            max_tokens: 1000,
+            max_tokens: 2000,
             messages: [{
                 role: 'user',
                 content: `Regenerate ONLY the "${stemName}" stem for a ${genreInfo} track at ${bpm} BPM.
@@ -172,48 +280,26 @@ Return a JSON object with this EXACT structure:
 Rules:
 - Make it different from before but fit the genre
 - Keep it 16-32 beats long
-- NO trailing commas in JSON
-- All numbers must be valid
+- 8-24 notes maximum
+- NO trailing commas
+- Velocity: 60-127 (integers)
 - Pitch format: Note + octave (e.g., "C2", "D#3")`
             }]
         });
 
         const content = message.content[0].text;
-        
-        // Try to extract JSON object from response
         const jsonMatch = content.match(/\{[\s\S]*\}/);
         
         if (!jsonMatch) {
-            console.error('No JSON object found in response:', content);
-            throw new Error('AI did not return valid JSON. Please try again.');
+            throw new Error('Could not parse AI response');
         }
         
         let stem;
         try {
-            // Clean up common JSON issues
             let jsonStr = jsonMatch[0];
-            // Remove trailing commas before closing brackets/braces
             jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
-            // Fix common formatting issues
-            jsonStr = jsonStr.replace(/\n/g, ' ');
-            
             stem = JSON.parse(jsonStr);
-            
-            // Validate structure
-            if (!stem.name || !Array.isArray(stem.notes)) {
-                throw new Error('Stem missing required fields');
-            }
-            
-            // Validate notes
-            for (const note of stem.notes) {
-                if (!note.pitch || note.time === undefined || note.duration === undefined) {
-                    throw new Error('Note missing required fields');
-                }
-            }
-            
-        } catch (parseError) {
-            console.error('JSON parse error:', parseError.message);
-            console.error('Attempted to parse:', jsonMatch[0].substring(0, 500));
+        } catch (e) {
             throw new Error('AI returned malformed JSON. Please try remaking again.');
         }
         
@@ -237,9 +323,10 @@ app.get('/api/health', (req, res) => {
 app.get('/api', (req, res) => {
     res.json({ 
         message: 'Dark MIDI Generator API',
-        version: '1.0.0',
+        version: '2.0.0',
         endpoints: {
-            '/api/generate': 'POST - Generate MIDI stems',
+            '/api/generate-song': 'POST - Generate full song with sections',
+            '/api/generate': 'POST - Generate simple MIDI stems',
             '/api/remake': 'POST - Remake a specific stem',
             '/api/health': 'GET - Health check'
         }
