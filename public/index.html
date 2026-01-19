@@ -9,11 +9,12 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { margin: 0; padding: 0; overflow-x: hidden; transition: background 0.3s; }
+        body { margin: 0; padding: 0; overflow-x: hidden; transition: background 0.3s; color: white; }
         .theme-dark { background: linear-gradient(to bottom right, #1a1a2e, #16213e, #0f3460); }
         .theme-doom { background: linear-gradient(to bottom right, #4a0000, #2d0000, #1a0000); }
         .theme-industrial { background: linear-gradient(to bottom right, #1a1a1a, #2d2d2d, #0a0a0a); }
         .theme-dungeon { background: linear-gradient(to bottom right, #1a0b3d, #2d1b69, #0f0529); }
+        * { color: white; }
         ::-webkit-scrollbar { width: 10px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
         ::-webkit-scrollbar-thumb { background: linear-gradient(#a855f7, #ec4899); border-radius: 5px; }
@@ -330,10 +331,16 @@
                                 <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 rounded-2xl p-6 border border-purple-500/30">
                                     <div className="flex justify-between items-center mb-4">
                                         <h2 className="text-3xl font-bold">{song.title}</h2>
-                                        <button onClick={() => download(song.sections.flatMap((s, i) => s.stems.map(st => ({...st, notes: st.notes.map(n => ({...n, time: n.time + (song.sections.slice(0,i).reduce((sum,sec) => sum + (sec.duration_beats||32), 0))}))}))), song.title)}
-                                            className="bg-green-600 px-6 py-3 rounded-xl flex items-center gap-2">
-                                            <Download className="w-5 h-5" />Full Song
-                                        </button>
+                                        <div className="flex gap-3">
+                                            <button onClick={() => playing === 'full' ? setPlaying(null) : setPlaying('full')}
+                                                className="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-xl flex items-center gap-2">
+                                                {playing === 'full' ? <><Pause className="w-5 h-5" />Stop</> : <><Play className="w-5 h-5" />Play Full</>}
+                                            </button>
+                                            <button onClick={() => download(song.sections.flatMap((s, i) => s.stems.map(st => ({...st, notes: st.notes.map(n => ({...n, time: n.time + (song.sections.slice(0,i).reduce((sum,sec) => sum + (sec.duration_beats||32), 0))}))}))), song.title)}
+                                                className="bg-green-600 hover:bg-green-700 px-6 py-3 rounded-xl flex items-center gap-2">
+                                                <Download className="w-5 h-5" />Download
+                                            </button>
+                                        </div>
                                     </div>
                                     <p className="text-gray-300">{song.sections?.length} sections • {bpm} BPM • {key} {scale}</p>
                                 </div>
@@ -352,10 +359,16 @@
                                                     </div>
                                                 )}
                                             </div>
-                                            <button onClick={() => download(sec.stems, `${song.title}-${sec.name}`)}
-                                                className="bg-green-600 px-4 py-2 rounded-lg flex items-center gap-2">
-                                                <Download className="w-4 h-4" />
-                                            </button>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => playing === si ? setPlaying(null) : setPlaying(si)}
+                                                    className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg flex items-center gap-2">
+                                                    {playing === si ? <><Pause className="w-4 h-4" />Stop</> : <><Play className="w-4 h-4" />Play</>}
+                                                </button>
+                                                <button onClick={() => download(sec.stems, `${song.title}-${sec.name}`)}
+                                                    className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg flex items-center gap-2">
+                                                    <Download className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </div>
 
                                         <div className="space-y-3">
