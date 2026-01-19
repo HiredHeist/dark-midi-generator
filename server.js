@@ -61,16 +61,25 @@ CRITICAL RULES:
 4. Keep note counts reasonable: 8-32 notes per stem depending on instrument
 5. Maintain musical coherence between sections
 6. Use proper note ranges for each instrument
+7. ALWAYS include a "vocal_melody" stem with melodic notes suitable for singing
+8. Add "lyrics" field to sections that need vocals with short, thematic phrases
 
 Return this EXACT JSON structure:
 {
   "title": "song title",
   "sections": [
     {
-      "name": "intro",
+      "name": "verse",
       "start_beat": 0,
-      "duration_beats": 16,
+      "duration_beats": 32,
+      "lyrics": "Optional: short lyric line if this section has vocals",
       "stems": [
+        {
+          "instrument": "vocal_melody",
+          "notes": [
+            {"pitch": "G3", "time": 0, "duration": 2, "velocity": 90}
+          ]
+        },
         {
           "instrument": "rhythm_guitar",
           "notes": [
@@ -86,6 +95,8 @@ Musical guidelines:
 - Tempo: ${bpm} BPM
 - Each section should flow into the next
 - Maintain consistent key and rhythm patterns
+- Vocal melody: Use singable range (C3-C5), create memorable melodic phrases
+- Lyrics: Dark, atmospheric, genre-appropriate themes (1-2 short lines per section)
 - Use dynamics (velocity variations)
 - NO trailing commas
 - All times are relative to section start (start at 0 for each section)`;
@@ -146,6 +157,100 @@ Musical guidelines:
     } catch (error) {
         console.error('Generation error:', error);
         res.status(500).json({ error: error.message || 'Failed to generate song' });
+    }
+});
+
+// Remake specific section with selected instruments
+app.post('/api/remake-section', async (req, res) => {
+    try {
+        const { genre, bpm, prompt, sectionName, instruments, durationBeats } = req.body;
+
+        if (!prompt || !genre || !bpm || !sectionName) {
+            return res.status(400).json({ error: 'Missing required parameters' });
+        }
+
+        if (!process.env.ANTHROPIC_API_KEY) {
+            return res.status(500).json({ error: 'API key not configured.' });
+        }
+
+        const genreDescriptions = {
+            'doom-metal': 'Doom Metal',
+            'industrial': 'Industrial',
+            'dungeon-synth': 'Dungeon Synth'
+        };
+
+        const genreInfo = genreDescriptions[genre];
+        const instrumentList = instruments && instruments.length > 0 
+            ? instruments.join(', ') 
+            : 'all instruments';
+
+        const systemPrompt = `Regenerate ONLY the "${sectionName}" section for a ${genreInfo} track at ${bpm} BPM.
+
+Original prompt: ${prompt}
+Instruments to regenerate: ${instrumentList}
+Duration: ${durationBeats || 32} beats
+
+CRITICAL: Return ONLY valid JSON - no markdown, no explanations.
+
+Return this EXACT JSON structure:
+{
+  "name": "${sectionName}",
+  "start_beat": 0,
+  "duration_beats": ${durationBeats || 32},
+  "lyrics": "Optional: short lyric line if vocals are included",
+  "stems": [
+    {
+      "instrument": "instrument_name",
+      "notes": [
+        {"pitch": "C3", "time": 0, "duration": 2, "velocity": 100}
+      ]
+    }
+  ]
+}
+
+Rules:
+- Make it DIFFERENT from the original but still fit the genre
+- Keep it ${durationBeats || 32} beats long
+- 8-32 notes per stem
+- If "vocal_melody" is in the instrument list, include singable melody (C3-C5 range) and add lyrics
+- NO trailing commas
+- All numbers must be valid integers
+- Pitch format: Note + octave (e.g., "C2", "D#3")`;
+
+        const message = await anthropic.messages.create({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 4000,
+            messages: [{
+                role: 'user',
+                content: systemPrompt
+            }]
+        });
+
+        const content = message.content[0].text;
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        
+        if (!jsonMatch) {
+            throw new Error('Could not parse AI response');
+        }
+        
+        let section;
+        try {
+            let jsonStr = jsonMatch[0];
+            jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+            section = JSON.parse(jsonStr);
+            
+            if (!section.stems || !Array.isArray(section.stems)) {
+                throw new Error('Invalid section structure');
+            }
+        } catch (e) {
+            throw new Error('AI returned malformed JSON. Please try again.');
+        }
+        
+        res.json({ section });
+
+    } catch (error) {
+        console.error('Remake section error:', error);
+        res.status(500).json({ error: error.message || 'Failed to remake section' });
     }
 });
 
