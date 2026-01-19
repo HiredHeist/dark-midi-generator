@@ -55,31 +55,24 @@ Create a complete song structure with these sections: ${genreInfo.structure}
 Available instruments: ${genreInfo.instruments}
 
 CRITICAL RULES:
-1. Return ONLY valid JSON - no markdown, no explanations
+1. Return ONLY valid JSON - no markdown, no explanations, no backticks
 2. Create separate sections (intro, verse, chorus, etc.)
-3. Each section has multiple instrument stems
-4. Keep note counts reasonable: 8-32 notes per stem depending on instrument
+3. Each section has 3-5 instrument stems
+4. Keep note counts SHORT: 8-20 notes per stem maximum
 5. Maintain musical coherence between sections
 6. Use proper note ranges for each instrument
-7. ALWAYS include a "vocal_melody" stem with melodic notes suitable for singing
-8. Add "lyrics" field to sections that need vocals with short, thematic phrases
+7. OPTIONAL: Add "vocal_melody" stem if user requests vocals
+8. OPTIONAL: Add "lyrics" field only if vocals are included
 
 Return this EXACT JSON structure:
 {
   "title": "song title",
   "sections": [
     {
-      "name": "verse",
+      "name": "intro",
       "start_beat": 0,
-      "duration_beats": 32,
-      "lyrics": "Optional: short lyric line if this section has vocals",
+      "duration_beats": 16,
       "stems": [
-        {
-          "instrument": "vocal_melody",
-          "notes": [
-            {"pitch": "G3", "time": 0, "duration": 2, "velocity": 90}
-          ]
-        },
         {
           "instrument": "rhythm_guitar",
           "notes": [
@@ -93,13 +86,14 @@ Return this EXACT JSON structure:
 
 Musical guidelines:
 - Tempo: ${bpm} BPM
-- Each section should flow into the next
-- Maintain consistent key and rhythm patterns
-- Vocal melody: Use singable range (C3-C5), create memorable melodic phrases
-- Lyrics: Dark, atmospheric, genre-appropriate themes (1-2 short lines per section)
-- Use dynamics (velocity variations)
+- Each section flows into the next
+- Keep compositions SIMPLE and SHORT
+- 3-5 stems per section maximum
+- 8-20 notes per stem maximum
+- Vocal melody (if requested): Use singable range C3-C5
 - NO trailing commas
-- All times are relative to section start (start at 0 for each section)`;
+- All numbers must be integers
+- All times relative to section start (start at 0)`;
 
         const message = await anthropic.messages.create({
             model: 'claude-sonnet-4-20250514',
@@ -112,44 +106,75 @@ Musical guidelines:
 
         const content = message.content[0].text;
         
-        // Extract JSON from response
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        // Try multiple ways to extract JSON
+        let jsonStr = null;
         
-        if (!jsonMatch) {
-            console.error('No JSON object found in response:', content);
-            throw new Error('AI did not return valid JSON. Please try again.');
+        // Method 1: Look for JSON object
+        let jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            jsonStr = jsonMatch[0];
+        }
+        
+        // Method 2: If no match, try removing markdown
+        if (!jsonStr) {
+            const cleaned = content.replace(/```json/g, '').replace(/```/g, '').trim();
+            jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                jsonStr = jsonMatch[0];
+            }
+        }
+        
+        if (!jsonStr) {
+            console.error('No JSON found in response:', content.substring(0, 500));
+            throw new Error('AI did not return valid JSON. Please try again with a simpler prompt.');
         }
         
         let songData;
         try {
-            let jsonStr = jsonMatch[0];
             // Clean up common JSON issues
-            jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
-            jsonStr = jsonStr.replace(/\n/g, ' ');
+            jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
+            jsonStr = jsonStr.replace(/\n/g, ' '); // Remove newlines
+            jsonStr = jsonStr.replace(/\r/g, ''); // Remove carriage returns
+            jsonStr = jsonStr.replace(/\t/g, ' '); // Replace tabs with spaces
             
             songData = JSON.parse(jsonStr);
             
             // Validate structure
             if (!songData.sections || !Array.isArray(songData.sections)) {
-                throw new Error('Invalid song structure');
+                throw new Error('Invalid song structure - missing sections array');
+            }
+            
+            if (songData.sections.length === 0) {
+                throw new Error('Invalid song structure - no sections generated');
             }
             
             // Validate each section
-            for (const section of songData.sections) {
-                if (!section.name || !section.stems || !Array.isArray(section.stems)) {
-                    throw new Error('Invalid section structure');
+            for (let i = 0; i < songData.sections.length; i++) {
+                const section = songData.sections[i];
+                if (!section.name) {
+                    throw new Error(`Section ${i} missing name`);
                 }
-                for (const stem of section.stems) {
-                    if (!stem.instrument || !Array.isArray(stem.notes)) {
-                        throw new Error('Invalid stem structure');
+                if (!section.stems || !Array.isArray(section.stems)) {
+                    throw new Error(`Section ${section.name} missing stems array`);
+                }
+                if (section.stems.length === 0) {
+                    throw new Error(`Section ${section.name} has no stems`);
+                }
+                for (let j = 0; j < section.stems.length; j++) {
+                    const stem = section.stems[j];
+                    if (!stem.instrument) {
+                        throw new Error(`Stem ${j} in section ${section.name} missing instrument name`);
+                    }
+                    if (!Array.isArray(stem.notes)) {
+                        throw new Error(`Stem ${stem.instrument} in section ${section.name} missing notes array`);
                     }
                 }
             }
             
         } catch (parseError) {
             console.error('JSON parse error:', parseError.message);
-            console.error('Attempted to parse:', jsonMatch[0].substring(0, 500));
-            throw new Error('AI returned malformed JSON. Please try generating again.');
+            console.error('Attempted to parse:', jsonStr.substring(0, 1000));
+            throw new Error('AI returned malformed JSON. Try: 1) Simpler prompt 2) Remove vocal melody request 3) Click generate again');
         }
         
         res.json({ song: songData });
