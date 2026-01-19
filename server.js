@@ -54,21 +54,15 @@ Create a complete song structure with these sections: ${genreInfo.structure}
 
 Available instruments: ${genreInfo.instruments}
 
-MANDATORY INSTRUMENTS - EVERY SECTION MUST HAVE ALL 5:
-1. "drums" - Kick, snare, hi-hat patterns (C1-D2 range)
-2. "bass" - Low end foundation (E1-A2 range)
-3. "rhythm_synth" - Chords and rhythm (C2-E3 range)
-4. "lead_synth" - Melodic lead (E3-C5 range)
-5. "vocal_melody" - Singing melody (C3-C5 range)
-
 CRITICAL RULES:
 1. Return ONLY valid JSON - no markdown, no explanations, no backticks
 2. Create separate sections (intro, verse, chorus, etc.)
-3. EVERY section MUST have ALL 5 mandatory instruments
+3. Each section has 3-5 instrument stems
 4. Keep note counts SHORT: 8-20 notes per stem maximum
 5. Maintain musical coherence between sections
 6. Use proper note ranges for each instrument
-7. ALWAYS include "lyrics" field with FULL LYRICS (2-4 lines) for sections with vocals
+7. ALWAYS include "vocal_melody" stem in sections with vocals
+8. ALWAYS include "lyrics" field with FULL LYRICS (2-4 lines) for vocal sections
 
 LYRICS THEMES BY GENRE:
 - Doom Metal: Psychedelic, marijuana, horror, cosmic dread. Think Electric Wizard, Sleep, Bongzilla.
@@ -86,33 +80,15 @@ Return this EXACT JSON structure:
       "lyrics": "Full lyrics here\nMultiple lines\nDark and atmospheric\nGenre-appropriate theme",
       "stems": [
         {
-          "instrument": "drums",
-          "notes": [
-            {"pitch": "C1", "time": 0, "duration": 0.5, "velocity": 100}
-          ]
-        },
-        {
-          "instrument": "bass",
-          "notes": [
-            {"pitch": "E1", "time": 0, "duration": 2, "velocity": 100}
-          ]
-        },
-        {
-          "instrument": "rhythm_synth",
-          "notes": [
-            {"pitch": "C2", "time": 0, "duration": 2, "velocity": 90}
-          ]
-        },
-        {
-          "instrument": "lead_synth",
-          "notes": [
-            {"pitch": "G3", "time": 0, "duration": 2, "velocity": 85}
-          ]
-        },
-        {
           "instrument": "vocal_melody",
           "notes": [
-            {"pitch": "E3", "time": 0, "duration": 2, "velocity": 90}
+            {"pitch": "G3", "time": 0, "duration": 2, "velocity": 90}
+          ]
+        },
+        {
+          "instrument": "rhythm_guitar",
+          "notes": [
+            {"pitch": "C2", "time": 0, "duration": 2, "velocity": 100}
           ]
         }
       ]
@@ -124,15 +100,13 @@ Musical guidelines:
 - Tempo: ${bpm} BPM
 - Each section flows into the next
 - Keep compositions SIMPLE and SHORT
-- EXACTLY 5 stems per section (all 5 mandatory instruments)
+- 3-5 stems per section maximum
 - 8-20 notes per stem maximum
 - Vocal melody: Use singable range C3-C5
 - Lyrics: 2-4 lines per vocal section, genre-appropriate
 - NO trailing commas
 - All numbers must be integers
-- All times relative to section start (start at 0)
-
-REMINDER: EVERY SECTION MUST HAVE: drums, bass, rhythm_synth, lead_synth, vocal_melody`;
+- All times relative to section start (start at 0)`;
 
         const message = await anthropic.messages.create({
             model: 'claude-sonnet-4-20250514',
