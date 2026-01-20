@@ -401,7 +401,7 @@
                             return bytes;
                         };
                         trackBytes.push(...encodeVarLen(event[0]));
-                        trackBytes.push(...event.slice(1)]);
+                        trackBytes.push(...event.slice(1));
                     });
                     const result = new Uint8Array(8 + trackBytes.length);
                     result.set([0x4D, 0x54, 0x72, 0x6B], 0);
