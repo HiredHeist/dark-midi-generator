@@ -58,7 +58,20 @@ Create a complete song structure with these sections: ${genreInfo.structure}
 Available instruments: ${genreInfo.instruments}
 
 MANDATORY INSTRUMENTS - EVERY SECTION MUST HAVE ALL 5:
-1. "drums" - Kick, snare, hi-hat patterns (C1-D2 range)
+1. "drums" - MUST use these exact MIDI notes:
+   - Bass/Kick: C1 (main kick drum)
+   - Bass/Kick 2: C#1 (alternate kick)
+   - Snare: D1 (snare drum)
+   - Clap: D#1 (hand clap)
+   - Tom 1: E1 (low tom)
+   - Tom 2: F1 (mid tom)
+   - Tom 3: F#1 (high tom)
+   - FX/Noise: G1 (effects/noise)
+   - Closed Hat: G#1 (closed hi-hat)
+   - Open Hat: A1 (open hi-hat)
+   - Crash: A#1 (crash cymbal)
+   - Ride: B1 (ride cymbal)
+   ONLY use these 12 notes for drums. Typical pattern: C1 (kick), D1 (snare), G#1 (closed hat)
 2. "bass" - Low end foundation (E1-A2 range)
 3. "rhythm_synth" - Chords and rhythm (C2-E3 range)
 4. "lead_synth" - Melodic lead (E3-C5 range)
@@ -91,7 +104,10 @@ Return this EXACT JSON structure:
         {
           "instrument": "drums",
           "notes": [
-            {"pitch": "C1", "time": 0, "duration": 0.5, "velocity": 100}
+            {"pitch": "C1", "time": 0, "duration": 0.5, "velocity": 110},
+            {"pitch": "G#1", "time": 0.5, "duration": 0.5, "velocity": 80},
+            {"pitch": "D1", "time": 1, "duration": 0.5, "velocity": 100},
+            {"pitch": "G#1", "time": 1.5, "duration": 0.5, "velocity": 80}
           ]
         },
         {
@@ -133,6 +149,8 @@ Musical guidelines:
 - For DOOM METAL: Use 6-12 notes per riff, very repetitive, slow
 - For INDUSTRIAL: 12-20 notes, mechanical/looped patterns
 - For DUNGEON SYNTH: 10-18 notes, melodic and atmospheric
+- DRUMS: ONLY use C1, C#1, D1, D#1, E1, F1, F#1, G1, G#1, A1, A#1, B1
+  Common pattern: C1 (kick), D1 (snare), G#1 (closed hat), A1 (open hat)
 - Vocal melody: Use singable range C3-C5
 - Lyrics: 2-4 lines per vocal section, genre-appropriate
 - NO trailing commas
