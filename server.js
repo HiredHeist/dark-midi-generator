@@ -31,18 +31,21 @@ app.post('/api/generate-song', async (req, res) => {
         const genreDescriptions = {
             'doom-metal': {
                 name: 'Doom Metal',
-                instruments: 'Heavy rhythm guitar (drop C/D tuning, C2-E3), Lead guitar (E3-G4), Crushing bass (E1-A2), Kick drum (C1), Snare (D2), Cymbals (F#3-A3)',
-                structure: 'Intro (8-16 beats), Verse (16-32 beats), Chorus (16-24 beats), Bridge (8-16 beats), Solo (16-32 beats), Outro (8-16 beats)'
+                instruments: 'Fuzzed rhythm guitar (B or C standard tuning, tritones, B1-E3), Thick bass following guitar (B0-E2), Simple pounding drums (C1 kick, D1 snare, F#2 hi-hat), Atmospheric lead (E3-B4), Vocal melody (C3-E4)',
+                structure: 'Intro (16 beats), Verse (32 beats), Chorus (24 beats), Bridge (16 beats), Solo (24 beats), Outro (16 beats)',
+                notes: 'Doom characteristics: VERY SLOW (40-70 BPM recommended), simple repetitive riffs (6-12 notes), fuzzed/scooped guitar tone, bass doubles guitar for wall of sound, slow pounding drums, tritone intervals, psychedelic atmosphere. Think Electric Wizard, Sleep, Black Sabbath.'
             },
             'industrial': {
                 name: 'Industrial',
-                instruments: 'Distorted synth bass (E1-A2), Lead synth (E3-C5), Mechanical percussion (C2-G3), Metallic hits (A3-C4), Noise textures (C3-E4)',
-                structure: 'Intro (8-16 beats), Build (16 beats), Main (32 beats), Breakdown (16 beats), Climax (24 beats), Outro (8-16 beats)'
+                instruments: 'Distorted harsh synth bass (E1-A2), Aggressive lead synth (E3-C5), Heavily processed mechanical drums (C1 kick, D1 snare with distortion), Metallic percussion hits (A2-C4), Noise/texture layers (C3-E4), Vocal melody (C3-B4)',
+                structure: 'Intro (8 beats), Build (16 beats), Main (32 beats), Breakdown (16 beats), Climax (24 beats), Outro (8 beats)',
+                notes: 'Industrial characteristics: 100-140 BPM, granular/glitchy textures, tape-degraded sound, distorted looped drums, harsh Oberheim Xpander-style synths, mechanical repetitive patterns, lo-fi deliberately "broken" production. Think Nine Inch Nails Broken/Downward Spiral era, Skinny Puppy.'
             },
             'dungeon-synth': {
                 name: 'Dungeon Synth',
-                instruments: 'Medieval synth lead (A3-E5), Ambient pad (A2-E3), Sub bass (E1-A1), Bell sounds (E5-A6), Choir pad (C3-G4)',
-                structure: 'Intro (16 beats), Theme A (32 beats), Theme B (32 beats), Development (32 beats), Reprise (24 beats), Outro (16 beats)'
+                instruments: 'Medieval synth lead (phrygian/dorian modes, A3-E5), Dark ambient pad (A2-E3), Deep sub bass (E1-A1), Bell/chime sounds (E5-A6), Ethereal choir pad (C3-G4), Vocal melody (C3-E4)',
+                structure: 'Intro (16 beats), Theme A (32 beats), Theme B (32 beats), Development (32 beats), Reprise (24 beats), Outro (16 beats)',
+                notes: 'Dungeon synth characteristics: 60-90 BPM, medieval scales (phrygian dominant, dorian), atmospheric layered synths, fantasy/LOTR inspired, dark ambient textures, minimal drums or medieval percussion, focus on melody and atmosphere.'
             }
         };
 
@@ -54,15 +57,21 @@ Create a complete song structure with these sections: ${genreInfo.structure}
 
 Available instruments: ${genreInfo.instruments}
 
+MANDATORY INSTRUMENTS - EVERY SECTION MUST HAVE ALL 5:
+1. "drums" - Kick, snare, hi-hat patterns (C1-D2 range)
+2. "bass" - Low end foundation (E1-A2 range)
+3. "rhythm_synth" - Chords and rhythm (C2-E3 range)
+4. "lead_synth" - Melodic lead (E3-C5 range)
+5. "vocal_melody" - Singing melody (C3-C5 range)
+
 CRITICAL RULES:
 1. Return ONLY valid JSON - no markdown, no explanations, no backticks
 2. Create separate sections (intro, verse, chorus, etc.)
-3. Each section has 3-5 instrument stems
+3. EVERY section MUST have ALL 5 mandatory instruments
 4. Keep note counts SHORT: 8-20 notes per stem maximum
 5. Maintain musical coherence between sections
 6. Use proper note ranges for each instrument
-7. ALWAYS include "vocal_melody" stem in sections with vocals
-8. ALWAYS include "lyrics" field with FULL LYRICS (2-4 lines) for vocal sections
+7. ALWAYS include "lyrics" field with FULL LYRICS (2-4 lines) for sections with vocals
 
 LYRICS THEMES BY GENRE:
 - Doom Metal: Psychedelic, marijuana, horror, cosmic dread. Think Electric Wizard, Sleep, Bongzilla.
@@ -80,15 +89,33 @@ Return this EXACT JSON structure:
       "lyrics": "Full lyrics here\nMultiple lines\nDark and atmospheric\nGenre-appropriate theme",
       "stems": [
         {
-          "instrument": "vocal_melody",
+          "instrument": "drums",
           "notes": [
-            {"pitch": "G3", "time": 0, "duration": 2, "velocity": 90}
+            {"pitch": "C1", "time": 0, "duration": 0.5, "velocity": 100}
           ]
         },
         {
-          "instrument": "rhythm_guitar",
+          "instrument": "bass",
           "notes": [
-            {"pitch": "C2", "time": 0, "duration": 2, "velocity": 100}
+            {"pitch": "E1", "time": 0, "duration": 2, "velocity": 100}
+          ]
+        },
+        {
+          "instrument": "rhythm_synth",
+          "notes": [
+            {"pitch": "C2", "time": 0, "duration": 2, "velocity": 90}
+          ]
+        },
+        {
+          "instrument": "lead_synth",
+          "notes": [
+            {"pitch": "G3", "time": 0, "duration": 2, "velocity": 85}
+          ]
+        },
+        {
+          "instrument": "vocal_melody",
+          "notes": [
+            {"pitch": "E3", "time": 0, "duration": 2, "velocity": 90}
           ]
         }
       ]
@@ -98,15 +125,21 @@ Return this EXACT JSON structure:
 
 Musical guidelines:
 - Tempo: ${bpm} BPM
+- Genre notes: ${genreInfo.notes || ''}
 - Each section flows into the next
 - Keep compositions SIMPLE and SHORT
-- 3-5 stems per section maximum
-- 8-20 notes per stem maximum
+- EXACTLY 5 stems per section (all 5 mandatory instruments)
+- Note count per stem: 8-20 notes (adjust based on tempo and genre)
+- For DOOM METAL: Use 6-12 notes per riff, very repetitive, slow
+- For INDUSTRIAL: 12-20 notes, mechanical/looped patterns
+- For DUNGEON SYNTH: 10-18 notes, melodic and atmospheric
 - Vocal melody: Use singable range C3-C5
 - Lyrics: 2-4 lines per vocal section, genre-appropriate
 - NO trailing commas
 - All numbers must be integers
-- All times relative to section start (start at 0)`;
+- All times relative to section start (start at 0)
+
+REMINDER: EVERY SECTION MUST HAVE: drums, bass, rhythm_synth, lead_synth, vocal_melody`;
 
         const message = await anthropic.messages.create({
             model: 'claude-sonnet-4-20250514',

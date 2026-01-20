@@ -98,6 +98,9 @@
         function DarkMIDIGenerator() {
             const [genre, setGenre] = useState('doom-metal');
             const [bpm, setBpm] = useState(80);
+            const [musicalKey, setMusicalKey] = useState('D');
+            const [scale, setScale] = useState('minor');
+            const [complexity, setComplexity] = useState(50);
             const [prompt, setPrompt] = useState('');
             const [isGenerating, setIsGenerating] = useState(false);
             const [song, setSong] = useState(null);
@@ -111,10 +114,13 @@
             const oscillatorsRef = useRef([]);
 
             const genres = [
-                { id: 'doom-metal', name: 'Doom Metal', description: 'Heavy, slow riffs', icon: '🎸', gradient: 'from-red-900 to-black' },
-                { id: 'industrial', name: 'Industrial', description: 'Mechanical rhythms', icon: '⚙️', gradient: 'from-gray-800 to-gray-900' },
-                { id: 'dungeon-synth', name: 'Dungeon Synth', description: 'Dark medieval', icon: '🏰', gradient: 'from-purple-900 to-indigo-950' }
+                { id: 'doom-metal', name: 'Doom Metal', description: 'Psychedelic horror', icon: '🎸', gradient: 'from-red-900 to-black' },
+                { id: 'industrial', name: 'Industrial', description: 'Harsh introspection', icon: '⚙️', gradient: 'from-gray-800 to-gray-900' },
+                { id: 'dungeon-synth', name: 'Dungeon Synth', description: 'Fantasy realms', icon: '🏰', gradient: 'from-purple-900 to-indigo-950' }
             ];
+
+            const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const scales = ['minor', 'major', 'dorian', 'phrygian', 'mixolydian'];
 
             // MIDI/Audio functions
             const noteToMidi = (note) => {
@@ -140,22 +146,31 @@
                 const gainNode = audioContext.createGain();
                 
                 const name = instrumentName.toLowerCase();
-                if (name.includes('bass')) oscillator.type = 'sawtooth';
-                else if (name.includes('guitar') || name.includes('riff')) oscillator.type = 'square';
-                else if (name.includes('vocal') || name.includes('melody')) oscillator.type = 'sine';
-                else if (name.includes('pad') || name.includes('synth')) oscillator.type = 'sine';
-                else oscillator.type = 'triangle';
+                // Drums need special handling - use sawtooth for low freq
+                if (name.includes('drum') || name.includes('kick') || name.includes('snare') || name.includes('percussion')) {
+                    oscillator.type = 'sawtooth';
+                    // Drums are very low frequency, boost gain
+                    const normalizedVelocity = ((velocity || 100) / 127) * 0.5;
+                    gainNode.gain.setValueAtTime(0, startTime);
+                    gainNode.gain.linearRampToValueAtTime(normalizedVelocity, startTime + 0.001);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + Math.min(duration, 0.1));
+                } else {
+                    // Normal instruments
+                    if (name.includes('bass')) oscillator.type = 'sawtooth';
+                    else if (name.includes('guitar') || name.includes('riff')) oscillator.type = 'square';
+                    else if (name.includes('vocal') || name.includes('melody')) oscillator.type = 'sine';
+                    else if (name.includes('pad') || name.includes('synth')) oscillator.type = 'sine';
+                    else oscillator.type = 'triangle';
+                    
+                    const normalizedVelocity = (velocity || 100) / 127;
+                    gainNode.gain.setValueAtTime(0, startTime);
+                    gainNode.gain.linearRampToValueAtTime(normalizedVelocity * 0.3, startTime + 0.01);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+                }
                 
                 oscillator.frequency.setValueAtTime(frequency, startTime);
-                
-                const normalizedVelocity = (velocity || 100) / 127;
-                gainNode.gain.setValueAtTime(0, startTime);
-                gainNode.gain.linearRampToValueAtTime(normalizedVelocity * 0.3, startTime + 0.01);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
-                
                 oscillator.connect(gainNode);
                 gainNode.connect(audioContext.destination);
-                
                 oscillator.start(startTime);
                 oscillator.stop(startTime + duration);
                 
@@ -238,10 +253,13 @@
                 stopPlayback();
 
                 try {
+                    const noteComplexity = Math.round(8 + (complexity / 100) * 12); // 8-20 notes based on complexity
+                    const enhancedPrompt = `${prompt}\n\nMusical key: ${musicalKey} ${scale}\nNote complexity: ${noteComplexity} notes per instrument`;
+                    
                     const response = await fetch('/api/generate-song', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ genre, bpm, prompt })
+                        body: JSON.stringify({ genre, bpm, prompt: enhancedPrompt, complexity: noteComplexity })
                     });
 
                     if (!response.ok) {
@@ -279,6 +297,12 @@
                         .filter(([idx, selected]) => selected)
                         .map(([idx]) => section.stems[parseInt(idx)].instrument);
                     
+                    if (selectedStems.length === 0) {
+                        setError('Please select at least one instrument to remix');
+                        setRemakingSection(null);
+                        return;
+                    }
+                    
                     const response = await fetch('/api/remake-section', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -296,10 +320,30 @@
 
                     const data = await response.json();
                     
+                    // Merge: keep unselected stems, replace selected ones
                     setSong(prev => {
                         const newSong = { ...prev };
                         newSong.sections = [...prev.sections];
-                        newSong.sections[sectionIndex] = data.section;
+                        const oldSection = prev.sections[sectionIndex];
+                        const newStems = [];
+                        
+                        oldSection.stems.forEach((oldStem, idx) => {
+                            const wasSelected = selectedInstruments[sectionIndex]?.[idx];
+                            if (!wasSelected) {
+                                // Keep unchanged stem
+                                newStems.push(oldStem);
+                            } else {
+                                // Find replacement from new section
+                                const replacement = data.section.stems.find(s => s.instrument === oldStem.instrument);
+                                newStems.push(replacement || oldStem);
+                            }
+                        });
+                        
+                        newSong.sections[sectionIndex] = {
+                            ...oldSection,
+                            stems: newStems,
+                            lyrics: data.section.lyrics || oldSection.lyrics
+                        };
                         return newSong;
                     });
 
@@ -357,7 +401,7 @@
                             return bytes;
                         };
                         trackBytes.push(...encodeVarLen(event[0]));
-                        trackBytes.push(...event.slice(1));
+                        trackBytes.push(...event.slice(1)]);
                     });
                     const result = new Uint8Array(8 + trackBytes.length);
                     result.set([0x4D, 0x54, 0x72, 0x6B], 0);
@@ -376,6 +420,18 @@
                 a.href = url;
                 const title = song.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
                 a.download = `${title}-${section.name}.mid`;
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+
+            const downloadInstrument = (stem, sectionName) => {
+                const midiBlob = createMIDIFile([stem], bpm);
+                const url = URL.createObjectURL(midiBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                const title = song.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                const instrument = stem.instrument.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                a.download = `${title}-${sectionName}-${instrument}.mid`;
                 a.click();
                 URL.revokeObjectURL(url);
             };
@@ -442,10 +498,35 @@
                                     className="w-full h-3 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
                             </div>
 
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                <div>
+                                    <label className="block text-sm font-semibold mb-3 text-purple-300">Key</label>
+                                    <select value={musicalKey} onChange={(e) => setMusicalKey(e.target.value)}
+                                        className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:border-purple-500">
+                                        {keys.map(k => <option key={k} value={k}>{k}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-3 text-purple-300">Scale</label>
+                                    <select value={scale} onChange={(e) => setScale(e.target.value)}
+                                        className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:border-purple-500">
+                                        {scales.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-3 text-purple-300">
+                                        Complexity: <span className="text-white">{complexity}%</span>
+                                    </label>
+                                    <input type="range" min="0" max="100" value={complexity} onChange={(e) => setComplexity(parseInt(e.target.value))}
+                                        className="w-full h-3 bg-gray-700 rounded-lg appearance-none cursor-pointer mt-2" />
+                                    <div className="text-xs text-gray-500 mt-1">Lower = simpler, Higher = more notes</div>
+                                </div>
+                            </div>
+
                             <div className="mb-6">
                                 <label className="block text-sm font-semibold mb-3 text-purple-300">Describe Your Song</label>
                                 <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)}
-                                    placeholder="e.g., Heavy doom metal with crushing riffs and dark atmosphere. Include intro, verse, chorus, bridge, solo, outro. Add vocal melody for haunting lyrics about darkness."
+                                    placeholder="e.g., Heavy industrial track in D minor inspired by Nine Inch Nails. Harsh mechanical percussion, distorted synth bass, grinding textures. Include intro, verse, chorus, breakdown, solo, outro. Add vocal melody with lyrics about rage and control."
                                     className="w-full h-40 px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl focus:outline-none focus:border-purple-500 text-white placeholder-gray-500 text-sm" />
                             </div>
 
@@ -534,9 +615,16 @@
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                             {section.stems?.map((stem, stemIdx) => (
                                                 <div key={stemIdx} className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        {stem.instrument.toLowerCase().includes('vocal') && <Mic className="w-4 h-4 text-pink-400" />}
-                                                        <div className="font-semibold text-purple-200 truncate text-sm">{stem.instrument}</div>
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <div className="flex items-center gap-2">
+                                                            {stem.instrument.toLowerCase().includes('vocal') && <Mic className="w-4 h-4 text-pink-400" />}
+                                                            <div className="font-semibold text-purple-200 truncate text-sm">{stem.instrument}</div>
+                                                        </div>
+                                                        <button onClick={() => downloadInstrument(stem, section.name)}
+                                                            className="bg-green-600 hover:bg-green-700 p-1 rounded transition-all"
+                                                            title="Download this instrument">
+                                                            <Download className="w-3 h-3" />
+                                                        </button>
                                                     </div>
                                                     <div className="text-xs text-gray-400">{stem.notes?.length || 0} notes</div>
                                                 </div>
